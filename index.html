@@ -220,16 +220,26 @@ let sceneIdx = 0;
 let pendingNext = null;
 
 // Web Audio
-const AC = new (window.AudioContext || window.webkitAudioContext)();
+let AC = null;
+
+function getAC() {
+    if (!AC) {
+        try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+    }
+    if (AC && AC.state === 'suspended') { try { AC.resume(); } catch(e) {} }
+    return AC;
+}
 
 function beep(freq, dur, type='sine', vol=0.3) {
     try {
-        const o = AC.createOscillator(), g = AC.createGain();
-        o.connect(g); g.connect(AC.destination);
+        const ac = getAC();
+        if (!ac) return;
+        const o = ac.createOscillator(), g = ac.createGain();
+        o.connect(g); g.connect(ac.destination);
         o.type = type; o.frequency.value = freq;
-        g.gain.setValueAtTime(vol, AC.currentTime);
-        g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + dur);
-        o.start(); o.stop(AC.currentTime + dur);
+        g.gain.setValueAtTime(vol, ac.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+        o.start(); o.stop(ac.currentTime + dur);
     } catch(e){}
 }
 
@@ -279,7 +289,7 @@ function showFloat(text, el, isPos) {
 
 // ==================== 游戏流程 ====================
 function startGame() {
-    try { AC.resume(); } catch(e) {}
+    getAC(); // 首次点击时初始化音频
     document.getElementById('overlay').classList.add('hidden');
     document.getElementById('hud').style.display = 'flex';
     document.getElementById('main').style.display = 'flex';
