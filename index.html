@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>职场新人模拟器</title>
+    <style>
+        :root {
+            --bg: #1a1a2e; --panel: #16213e; --btn: #0f3460; --btn-hover: #1b4985;
+            --text: #e2e8f0; --muted: #94a3b8; --red: #e94560; --green: #4ade80; --gold: #fbbf24;
+        }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
+        body { background: var(--bg); color: var(--text); font-family: 'PingFang SC','Microsoft YaHei',sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+        /* 顶部数值栏 */
+        #hud { position: fixed; top: 0; left: 0; right: 0; display: none; justify-content: space-around; padding: 12px 20px; background: rgba(22,33,62,0.97); box-shadow: 0 2px 12px rgba(0,0,0,0.5); z-index: 100; }
+        .stat { display: flex; flex-direction: column; align-items: center; position: relative; }
+        .stat-label { font-size: 0.75rem; color: var(--muted); margin-bottom: 3px; }
+        .stat-val { font-size: 1.3rem; font-weight: bold; transition: color 0.3s; }
+        .stat-bar { width: 80px; height: 5px; background: rgba(255,255,255,0.15); border-radius: 3px; margin-top: 4px; overflow: hidden; }
+        .stat-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease, background 0.3s; }
+        #fill-e { background: var(--green); }
+        #fill-r { background: #60a5fa; }
+        #fill-m { background: var(--gold); }
+
+        /* 飘字 */
+        .float-tag { position: fixed; font-size: 1.1rem; font-weight: bold; pointer-events: none; z-index: 200; animation: floatUp 1.2s ease forwards; }
+        .float-pos { color: var(--green); }
+        .float-neg { color: var(--red); }
+        @keyframes floatUp { 0%{opacity:1;transform:translateY(0) scale(1)} 100%{opacity:0;transform:translateY(-60px) scale(1.3)} }
+
+        /* 预警红晕 */
+        #vignette { position: fixed; inset: 0; pointer-events: none; z-index: 50; transition: box-shadow 0.8s; }
+        #vignette.danger { box-shadow: inset 0 0 80px 30px rgba(233,69,96,0.6); }
+
+        /* 主内容 */
+        #main { flex: 1; margin-top: 80px; padding: 20px; max-width: 560px; width: 100%; align-self: center; display: none; flex-direction: column; justify-content: center; overflow-y: auto; }
+        .scene-num { font-size: 0.85rem; color: var(--muted); text-align: center; margin-bottom: 6px; letter-spacing: 2px; text-transform: uppercase; }
+        .scene-title { font-size: 1.5rem; color: var(--gold); text-align: center; margin-bottom: 16px; }
+        .scene-body { font-size: 1.05rem; line-height: 1.75; background: rgba(0,0,0,0.3); padding: 18px; border-radius: 12px; border-left: 4px solid var(--btn); margin-bottom: 24px; }
+        .choices { display: flex; flex-direction: column; gap: 12px; }
+        .choice-btn { background: var(--btn); color: var(--text); border: 2px solid transparent; padding: 14px 18px; border-radius: 12px; font-size: 1rem; text-align: left; cursor: pointer; transition: all 0.2s; line-height: 1.45; }
+        .choice-btn:hover { background: var(--btn-hover); border-color: var(--gold); }
+        .choice-btn:active { transform: scale(0.97); }
+
+        /* 反馈弹窗 */
+        #modal { position: fixed; inset: 0; background: rgba(0,0,0,0.82); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 300; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+        #modal.show { opacity: 1; pointer-events: all; }
+        .modal-box { background: var(--panel); padding: 28px; border-radius: 16px; max-width: 400px; width: 100%; text-align: center; border: 1px solid var(--btn); }
+        .modal-text { font-size: 1.15rem; line-height: 1.7; margin-bottom: 22px; }
+        .modal-deltas { display: flex; justify-content: center; gap: 16px; margin-bottom: 18px; font-size: 1rem; font-weight: bold; }
+        .delta-pos { color: var(--green); }
+        .delta-neg { color: var(--red); }
+
+        /* 覆盖屏（封面/结局） */
+        #overlay { position: fixed; inset: 0; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 30px; z-index: 400; text-align: center; }
+        .logo { font-size: 2.6rem; color: var(--gold); margin-bottom: 8px; }
+        .tagline { color: var(--muted); margin-bottom: 40px; font-size: 1.05rem; }
+        .ending-badge { font-size: 0.9rem; color: var(--muted); margin-bottom: 8px; letter-spacing: 2px; }
+        .ending-title { font-size: 2rem; color: var(--red); margin-bottom: 18px; }
+        .ending-body { font-size: 1.05rem; line-height: 1.8; background: rgba(0,0,0,0.3); padding: 20px; border-radius: 12px; max-width: 480px; margin-bottom: 28px; }
+        .btn-row { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+
+        /* 通用按钮 */
+        .btn { padding: 13px 28px; border: none; border-radius: 10px; font-size: 1.05rem; font-weight: bold; cursor: pointer; color: white; transition: transform 0.15s; }
+        .btn:active { transform: scale(0.95); }
+        .btn-primary { background: var(--red); }
+        .btn-secondary { background: var(--btn-hover); }
+        .btn-gray { background: #475569; }
+
+        /* Toast */
+        #toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: var(--green); color: #000; padding: 10px 22px; border-radius: 20px; font-weight: bold; opacity: 0; transition: opacity 0.3s; z-index: 500; pointer-events: none; }
+        #toast.show { opacity: 1; }
+    </style>
+</head>
+<body>
+
+<div id="vignette"></div>
+
+<!-- HUD -->
+<div id="hud">
+    <div class="stat">
+        <div class="stat-label">⚡ 精力</div>
+        <div class="stat-val" id="v-e">80</div>
+        <div class="stat-bar"><div class="stat-fill" id="fill-e" style="width:80%"></div></div>
+    </div>
+    <div class="stat">
+        <div class="stat-label">🤝 信誉</div>
+        <div class="stat-val" id="v-r">50</div>
+        <div class="stat-bar"><div class="stat-fill" id="fill-r" style="width:50%"></div></div>
+    </div>
+    <div class="stat">
+        <div class="stat-label">💰 钱</div>
+        <div class="stat-val" id="v-m">3000</div>
+        <div class="stat-bar"><div class="stat-fill" id="fill-m" style="width:50%"></div></div>
+    </div>
+</div>
+
+<!-- 主内容 -->
+<div id="main">
+    <div class="scene-num" id="scene-num"></div>
+    <div class="scene-title" id="scene-title"></div>
+    <div class="scene-body" id="scene-body"></div>
+    <div class="choices" id="choices"></div>
+</div>
+
+<!-- 反馈弹窗 -->
+<div id="modal">
+    <div class="modal-box">
+        <div class="modal-deltas" id="modal-deltas"></div>
+        <div class="modal-text" id="modal-text"></div>
+        <button class="btn btn-primary" style="width:100%" onclick="next()">继续 →</button>
+    </div>
+</div>
+
+<!-- 封面/结局 -->
+<div id="overlay">
+    <div id="start-view">
+        <div class="logo">🏢 职场新人模拟器</div>
+        <div class="tagline">打工人的赛博朋克生存指南</div>
+        <button class="btn btn-secondary" style="font-size:1.2rem;padding:15px 40px" onclick="startGame()">开始上班 →</button>
+    </div>
+    <div id="end-view" style="display:none">
+        <div class="ending-badge">结局达成</div>
+        <div class="ending-title" id="end-title"></div>
+        <div class="ending-body" id="end-body"></div>
+        <div class="btn-row">
+            <button class="btn btn-secondary" onclick="copyShare()">📋 复制分享</button>
+            <button class="btn btn-gray" onclick="location.reload()">🔄 重新投胎</button>
+        </div>
+    </div>
+</div>
+
+<div id="toast">已复制！</div>
+
+<script>
+// ==================== 数据 ====================
+const SCENES = [
+  {
+    num: "第一关", title: "入职第一天",
+    body: "你被拉进了【发大财不想上班】部门群，满屏欢迎花瓣。部门老大发了个10块红包（50人份）。旁边工位的老员工冷漠地瞥了你一眼。",
+    choices: [
+      { text: "🔴 秒抢红包并回复"谢谢老板，老板大气！"",
+        delta: {e:-5, r:10, m:1},
+        fb: "你抢到了0.01元，并成功引起老板注意。代价是你现在必须跟他热情打招呼每一天。" },
+      { text: "😶 默默潜水，绝不暴露真实微信号。",
+        delta: {e:5, r:-10, m:0},
+        fb: "你保持了高冷人设，但HR以为你被盗号了，在系统里给你打了个问号。" },
+      { text: "🤣 发一个尺度略大的沙雕表情包活跃气氛。",
+        delta: {e:10, r:-20, m:0},
+        fb: "群里瞬间死寂，老板默默撤回了红包。你获得了称号【新人炸弹】。" }
+    ]
+  },
+  {
+    num: "第二关", title: "第一次汇报",
+    body: "周会轮到你汇报，PPT正投在屏幕上。你突然发现核心数据多写了一个零——本来是500万，你写成了5000万。部门总监正推着眼镜盯着你。",
+    choices: [
+      { text: "🗣️ 硬着头皮用"底层逻辑"和"赋能"糊弄过去。",
+        delta: {e:-15, r:-10, m:0},
+        fb: "你输出了一堆黑话，总监听懂了，然后大为震撼。你在他心里从"新人"变成了"玩意儿"。" },
+      { text: "😔 诚恳认错："对不起，我刚发现数据有误。"",
+        delta: {e:5, r:15, m:-500},
+        fb: "领导欣赏你的诚实。然后扣了你当月绩效500块，因为"犯错要有代价"。" },
+      { text: "🏃 捂住肚子："哎呀这外卖！"然后冲向厕所。",
+        delta: {e:-10, r:-20, m:0},
+        fb: "你成功逃避了汇报，但成了部门著名的"窜稀大侠"，同事们开始叫你"跑哥"。" }
+    ]
+  },
+  {
+    num: "第三关", title: "加班决策",
+    body: "周五晚7点，你收拾好包准备去看陈奕迅演唱会（票价1500）。主管突然扔来消息：「有个紧急Pitch PPT，明早要，能帮个忙吗？」",
+    choices: [
+      { text: "😭 票不要了！含泪加班通宵！",
+        delta: {e:-40, r:25, m:-1500},
+        fb: "你失去了快乐和金钱，但获得了主管一个大拇指和一句"你这个人靠得住"。颈椎表示感谢。" },
+      { text: "🎵 准点下班！演唱会我来了！工作见鬼！",
+        delta: {e:20, r:-20, m:0},
+        fb: "Eason唱哭了你。周一主管看你的眼神变了。但那一夜你记了一辈子。" },
+      { text: "🤝 做一部分再走，边界感拉满。",
+        delta: {e:-15, r:5, m:0},
+        fb: "你两边都没落好，但你告诉自己这叫"保持边界"。演唱会迟到40分钟，正好赶上第三首。" }
+    ]
+  },
+  {
+    num: "第四关", title: "职场站队",
+    body: "会议室里，你的领导A和隔壁部门领导B正在抢一个核心项目，吵得不可开交。A突然转头问你：「小张，你是一线的，你说谁的方案对？」",
+    choices: [
+      { text: "✊ 坚定站队领导A，给他撑腰。",
+        delta: {e:-10, r:20, m:0},
+        fb: "A对你刮目相看。B从此每次配合你的需求都慢半拍，资料永远在"整理中"。" },
+      { text: "🥣 和稀泥："两个方案各有优势……"",
+        delta: {e:5, r:-15, m:0},
+        fb: "两个人都觉得你是滑头。你获得了跨部门最高好评：「这人没用，但不惹事。」" },
+      { text: "🚽 捂肚子遁走（第二次了）。",
+        delta: {e:5, r:-10, m:0},
+        fb: "你成功逃跑。但你的"窜稀"记录再度被更新。同事们开始怀疑你有肠胃病。" }
+    ]
+  },
+  {
+    num: "第五关", title: "年终KPI面谈",
+    body: "年底，老板叫你进会议室，叹了口气：「你今年很努力，但部门名额有限，综合考量，只能给你打个3.25。不过明年有个大项目，我准备交给你。」",
+    choices: [
+      { text: "😤 默默接受，暗自发誓明年卷死所有人。",
+        delta: {e:-40, r:15, m:0},
+        fb: "你咽下了这口气。回到工位，颤抖着手打开Excel，开始做明年的计划。" },
+      { text: "📱 当场翻脸，拿出手机录音，走劳动仲裁。",
+        delta: {e:-20, r:-80, m:3000},
+        fb: "你拿到了2N赔偿，然后被业内所有同行知道了你的名字。有人叫你英雄，有人叫你刺儿头。" },
+      { text: "😊 微笑点头，回工位立刻打开招聘软件。",
+        delta: {e:-10, r:0, m:0},
+        fb: "你学会了最优雅的职场动作：骑驴找马。老板还以为你被感动了。" }
+    ]
+  }
+];
+
+// ==================== 状态 ====================
+let stats = { e: 80, r: 50, m: 3000 };
+let sceneIdx = 0;
+let pendingNext = null;
+
+// Web Audio
+const AC = new (window.AudioContext || window.webkitAudioContext)();
+
+function beep(freq, dur, type='sine', vol=0.3) {
+    try {
+        const o = AC.createOscillator(), g = AC.createGain();
+        o.connect(g); g.connect(AC.destination);
+        o.type = type; o.frequency.value = freq;
+        g.gain.setValueAtTime(vol, AC.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + dur);
+        o.start(); o.stop(AC.currentTime + dur);
+    } catch(e){}
+}
+
+function playClick() { beep(800, 0.1, 'square', 0.15); }
+function playWarn() { beep(200, 0.5, 'sawtooth', 0.2); setTimeout(()=>beep(180,0.4,'sawtooth',0.15),300); }
+function playGood() { [523,659,784,1047].forEach((f,i)=>setTimeout(()=>beep(f,0.2,'sine',0.2),i*100)); }
+function playBad() { [400,350,300,250].forEach((f,i)=>setTimeout(()=>beep(f,0.3,'sawtooth',0.25),i*150)); }
+
+// ==================== UI更新 ====================
+function updateHUD(deltas) {
+    ['e','r','m'].forEach(k => {
+        const old = stats[k];
+        if(deltas && deltas[k]) stats[k] += deltas[k];
+        // 边界
+        stats.e = Math.max(0, Math.min(100, stats.e));
+        stats.r = Math.max(0, Math.min(100, stats.r));
+        stats.m = Math.max(0, stats.m);
+        
+        document.getElementById('v-e').textContent = stats.e;
+        document.getElementById('v-r').textContent = stats.r;
+        document.getElementById('v-m').textContent = stats.m;
+        
+        document.getElementById('fill-e').style.width = stats.e + '%';
+        document.getElementById('fill-r').style.width = Math.min(stats.r, 100) + '%';
+        document.getElementById('fill-m').style.width = Math.min(stats.m/60*100, 100) + '%';
+    });
+
+    // 预警
+    if(stats.e < 20 || stats.r < 20) {
+        document.getElementById('vignette').classList.add('danger');
+        playWarn();
+    } else {
+        document.getElementById('vignette').classList.remove('danger');
+    }
+}
+
+function showFloat(text, el, isPos) {
+    const tag = document.createElement('div');
+    tag.className = 'float-tag ' + (isPos ? 'float-pos' : 'float-neg');
+    tag.textContent = text;
+    const rect = el.getBoundingClientRect();
+    tag.style.left = (rect.left + rect.width/2) + 'px';
+    tag.style.top = (rect.top) + 'px';
+    document.body.appendChild(tag);
+    setTimeout(()=>tag.remove(), 1300);
+}
+
+// ==================== 游戏流程 ====================
+function startGame() {
+    AC.resume();
+    document.getElementById('overlay').style.display = 'none';
+    document.getElementById('hud').style.display = 'flex';
+    document.getElementById('main').style.display = 'flex';
+    showScene(0);
+}
+
+function showScene(idx) {
+    const s = SCENES[idx];
+    document.getElementById('scene-num').textContent = s.num;
+    document.getElementById('scene-title').textContent = s.title;
+    document.getElementById('scene-body').textContent = s.body;
+    
+    const cc = document.getElementById('choices');
+    cc.innerHTML = '';
+    s.choices.forEach((c, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'choice-btn';
+        btn.textContent = c.text;
+        btn.onclick = () => choose(i);
+        cc.appendChild(btn);
+    });
+
+    // 淡入
+    const m = document.getElementById('main');
+    m.style.opacity = 0;
+    setTimeout(()=>{ m.style.transition='opacity 0.4s'; m.style.opacity=1; },50);
+}
+
+function choose(choiceIdx) {
+    playClick();
+    const scene = SCENES[sceneIdx];
+    const choice = scene.choices[choiceIdx];
+    const d = choice.delta;
+
+    // 显示飘字
+    const hudEl = document.getElementById('hud');
+    if(d.e) showFloat((d.e>0?'+':'')+d.e+'⚡', hudEl, d.e>0);
+    if(d.r) setTimeout(()=>showFloat((d.r>0?'+':'')+d.r+'🤝', hudEl, d.r>0),150);
+    if(d.m) setTimeout(()=>showFloat((d.m>0?'+':'')+d.m+'💰', hudEl, d.m>0),300);
+
+    // 更新数值
+    updateHUD(d);
+
+    // 显示弹窗
+    const dm = document.getElementById('modal-deltas');
+    dm.innerHTML = '';
+    if(d.e) { const s=document.createElement('span'); s.className=d.e>0?'delta-pos':'delta-neg'; s.textContent=(d.e>0?'+':'')+d.e+' 精力'; dm.appendChild(s); }
+    if(d.r) { const s=document.createElement('span'); s.className=d.r>0?'delta-pos':'delta-neg'; s.textContent=(d.r>0?'+':'')+d.r+' 信誉'; dm.appendChild(s); }
+    if(d.m) { const s=document.createElement('span'); s.className=d.m>0?'delta-pos':'delta-neg'; s.textContent=(d.m>0?'+':'')+d.m+' 钱'; dm.appendChild(s); }
+
+    document.getElementById('modal-text').textContent = choice.fb;
+    document.getElementById('modal').classList.add('show');
+
+    pendingNext = () => {
+        document.getElementById('modal').classList.remove('show');
+        // 检查结局
+        if(stats.e <= 0) { showEnding('BAD_E'); return; }
+        if(stats.r <= 0) { showEnding('BAD_R'); return; }
+        if(stats.m <= 0) { showEnding('BAD_M'); return; }
+        sceneIdx++;
+        if(sceneIdx >= SCENES.length) { showEnding('GOOD'); return; }
+        showScene(sceneIdx);
+    };
+}
+
+function next() {
+    if(pendingNext) { pendingNext(); pendingNext=null; }
+}
+
+function showEnding(type) {
+    const ENDINGS = {
+        BAD_E: {
+            title: '【工位仙人】',
+            body: '⚡精力耗尽。你在工位上悄然倒下，被同事发现时已经合眼。救护车来得很快，但PPT还没改完。\n\n墓志铭：「他奉献了一切，除了假期。」'
+        },
+        BAD_R: {
+            title: '【光速毕业】',
+            body: '🤝信誉归零。HR面带微笑地通知你："综合考量，公司决定与你解除劳动关系。"你的工位在下午就被收拾干净了。\n\n墓志铭：「他曾经在这里工作过，大概。」'
+        },
+        BAD_M: {
+            title: '【露宿街头】',
+            body: '💰钱花光了，房租交不起。房东礼貌地换了门锁，你礼貌地睡在楼道里。\n\n墓志铭：「他用全部积蓄证明了——北漂不容易。」'
+        },
+        GOOD: null
+    };
+
+    let title, body;
+    if(type === 'GOOD') {
+        if(stats.r >= 80) {
+            title = '【职场新星】';
+            body = `🌟你凭借出色的信誉（${stats.r}）和顽强的精力（${stats.e}），成功度过了试用期！\n\n领导在全员大会上表扬了你，你获得了"最佳新人奖"和一个没有奖金的证书。\n\n但你知道，游戏才刚刚开始……\n\n墓志铭：「他活下来了。」`;
+            playGood();
+        } else if(stats.e >= 70) {
+            title = '【职场老油条】';
+            body = `😌你以完美的精力值（${stats.e}）平稳度过了试用期。不内卷、不摸鱼，卡着点上下班。\n\n同事们叫你"最懂生活的人"。你知道，这个评价比任何奖项都值钱。\n\n墓志铭：「他活得最明白。」`;
+            playGood();
+        } else {
+            title = '【透明打工人】';
+            body = `🫥你默默地度过了试用期，没有高光，也没有翻车。领导记不住你的名字，但也没有理由开除你。\n\n你转正了。钱（${stats.m}元）还够活，继续加油。\n\n墓志铭：「他存在过。」`;
+            playGood();
+        }
+    } else {
+        const e = ENDINGS[type];
+        title = e.title;
+        body = e.body;
+        playBad();
+    }
+
+    document.getElementById('end-title').textContent = title;
+    document.getElementById('end-body').textContent = body;
+    document.getElementById('start-view').style.display = 'none';
+    document.getElementById('end-view').style.display = 'block';
+    document.getElementById('overlay').style.display = 'flex';
+    document.getElementById('hud').style.display = 'none';
+    document.getElementById('main').style.display = 'none';
+    document.getElementById('modal').classList.remove('show');
+}
+
+function copyShare() {
+    const title = document.getElementById('end-title').textContent;
+    const body = document.getElementById('end-body').textContent;
+    const text = `【职场新人模拟器】\n我的结局：${title}\n\n${body}\n\n你敢来试试吗？`;
+    navigator.clipboard.writeText(text).then(()=>{
+        const t = document.getElementById('toast');
+        t.classList.add('show');
+        setTimeout(()=>t.classList.remove('show'), 2000);
+    }).catch(()=>alert(text));
+}
+</script>
+</body>
+</html>
